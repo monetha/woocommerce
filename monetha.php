@@ -199,7 +199,7 @@ function monetha_init()
 				'i_delivery'	=> 'post',
 			);
 
-			$url = 'http://payment.monetha.io/orders/add?'.http_build_query($request);
+			$url = 'https://payment.monetha.io/orders/add?'.http_build_query($request);
 			$url = preg_replace('/[\r\n]+/is', '', $url);
 
 			return array(
