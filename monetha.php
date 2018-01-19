@@ -4,7 +4,7 @@
   Plugin Name: WooCommerce Payment Gateway - Monetha
   Plugin URI: Monetha
   Description: Accepts Monetha
-  Version: 2.0.x
+  Version: 2.0.3
   Author: Monetha
   Author URI: Monetha
   License: GPL version 2 or later - http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -18,6 +18,7 @@ add_action('plugins_loaded', 'monetha_init');
 
 function monetha_init()
 {
+    
 	if(!class_exists('WC_Payment_Gateway'))
 	{
 		return;
@@ -58,20 +59,17 @@ function monetha_init()
 
 			// Define user set variables
 			$this->title		= $this->settings['title'];
-			$this->projectid	= $this->settings['projectid'];
-			$this->secret		= $this->settings['secret'];
-
-			// unused
-			$this->test			= false;
-			$this->debug		= false;
+			$this->merchantKey	= $this->settings['merchantKey'];
+            $this->merchantSecret = $this->settings['merchantSecret'];
+            $this->testMode = $this->settings['testMode'];
 
 			$acc = get_query_var( 'page_id', 0 );
 
 			if ( defined( 'DOING_AJAX' ) && DOING_AJAX )
 			{
-				$informacija = 'Pay with Ether via Monetha'; // custom
+				$info = 'Pay with Ether via Monetha'; // custom
 
-				$this->description = $informacija;
+				$this->description = $info;
 			}
 
 			// Actions
@@ -108,6 +106,14 @@ function monetha_init()
 					'type'        => 'checkbox',
 					'description' => '',
 					'default'     => 'no'
+                ),
+                'testMode'     => array
+				(
+					'title'       => __('Test Mode', 'woocommerce'),
+					'label'       => __('If checked all payments will be executed on Ropsten testnet', 'woocommerce'),
+					'type'        => 'checkbox',
+					'description' => '',
+					'default'     => 'no'
 				),
 				'description' => array
 				(
@@ -123,18 +129,18 @@ function monetha_init()
 					'description' => __('Payment method title that the customer will see on your website.', 'woocommerce'),
 					'default'     => __('Monetha', 'woocommerce')
 				),
-				'projectid'   => array
+				'merchantKey'   => array
 				(
-					'title'       => __('Project ID', 'woocommerce'),
+					'title'       => __('Merchant Key', 'woocommerce'),
 					'type'        => 'text',
-					'description' => __('Project id', 'woocommerce'),
+					'description' => __('Merchant Key', 'woocommerce'),
 					'default'     => __('', 'woocommerce')
 				),
-				'secret'    => array
+				'merchantSecret'    => array
 				(
-					'title'       => __('Secret', 'woocommerce'),
+					'title'       => __('Merchant Secret', 'woocommerce'),
 					'type'        => 'text',
-					'description' => __('Monetha secret', 'woocommerce'),
+					'description' => __('Merchant Secret', 'woocommerce'),
 					'default'     => __('', 'woocommerce')
 				),
 			);
@@ -148,64 +154,161 @@ function monetha_init()
 			}
 		}
 
-		//Redirect to payment
+        /* 
+         *
+         * Execute monetha integration calls and redirect to payment page on success
+         * 
+         */ 
 		function process_payment($order_id)
 		{
+            $mthApi = "https://api.monetha.io/";
+            if ($this->testMode == "yes") {
+                $mthApi = "https://api-sandbox.monetha.io/";
+            }   
+            
 			global $woocommerce;
+            
+            if ($this->merchantKey == "" || $this->merchantSecret == "") {
+                $message = 'payment gateway miss-configured. Please check instructions and validate Woocommerce checkout settings';
+                wc_add_notice( __('Payment error: ', 'woothemes') . $message, 'error' );
+                if ($this->log) {
+                    $this->log->add('monetha', $message);
+                }
+                return;
+            }
 
-			$order = new WC_Order($order_id);
-			$language = explode('-', get_bloginfo( 'language', 'raw' ));
-			$lng = array('lt'=>'LIT', 'lv'=>'LAV', 'ee'=>'EST', 'ru'=>'RUS', 'de'=>'GER', 'pl'=>'POL', 'en'=>'ENG');
 
+            $order = new WC_Order($order_id);
+            
 			if ($this->log) {
 				$this->log->add('monetha', 'Generating payment form for order #' . $order_id . '. Notify URL: ' . trailingslashit(home_url()) . '?monethaListener=monetha_callback');
 			}
 
-			$lang = get_locale();
-			$lang = explode('_', $lang);
-
 			$items = array();
 
-			// add line items
+			// collect line items
 			foreach($order->get_items() as $item_id => $item)
 			{
 				$items[] = array
 				(
 					'name'			=> $item->get_name(),
 					'quantity'		=> $item->get_quantity(),
-					'price'			=> wc_format_decimal( $order->get_item_total( $item ), 2 ),
-					'subtotal'		=> wc_format_decimal( $order->get_line_subtotal( $item ), 2 ),
-					'total_tax'		=> wc_format_decimal( $order->get_line_tax( $item ), 2 ),
-					'total'			=> wc_format_decimal( $order->get_line_total( $item ), 2 ),
-					'warranty'		=> date('Y-m-d', strtotime('+24 month')),
+					'amount_fiat'	=> wc_format_decimal( $item->get_total()/$item->get_quantity(), 2 )
 				);
-			}
+            }
 
-			$request = array
-			(
-				'pid'			=> $this->projectid,
-				'secret'		=> $this->secret,
-				'oid'			=> $order->id,
-				'amount'		=> round($order->get_total(), 10),
-				'currency'		=> get_woocommerce_currency(),
-				'return'		=> $this->get_return_url( $order ),
-				'cancel'		=> $order->get_cancel_order_url(),
-				'callback'		=> trailingslashit(get_bloginfo('wpurl')) . '?wc-api=wc_gateway_monetha',
+            $hash = hash('sha256',$this->merchantSecret + $order->get_id());
 
-				'i_firstname'	=> $order->billing_first_name,
-				'i_lastname'	=> $order->billing_last_name,
-				'i_email'		=> $order->billing_email,
-				'i_items'		=> json_encode($items),
-				'i_delivery'	=> 'post',
-			);
+            $req = array(
+                'deal' => array(
+                    'amount_fiat' => $order->get_total(),
+                    'currency_fiat' => get_woocommerce_currency(),
+                    'line_items' => $items,
+                    'client' => array(
+                        'contact_name' => $order->get_billing_first_name() . " " . $order->get_billing_last_name(),
+                        'contact_email' => $order->get_billing_email(),
+                        'contact_phone_number' => $order->get_billing_phone()
+                    )
+                ),
+                'return_url' => $this->get_return_url($order),
+                'callback_url' => trailingslashit(get_bloginfo('wpurl')) . '?wc-api=wc_gateway_monetha&order=' . $hash,
+                'cancel_url' => $order->get_cancel_order_url(),
+                'external_order_id' => $order->get_id()." ",
+            );
 
-			$url = 'https://payment.monetha.io/orders/add?'.http_build_query($request);
-			$url = preg_replace('/[\r\n]+/is', '', $url);
+            // Verify order information with Monetha
+            $chSign = curl_init();
+            curl_setopt_array($chSign, array(
+                CURLOPT_URL => $mthApi . "v1/merchants/offer",
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CUSTOMREQUEST => "POST",
+                CURLOPT_POSTFIELDS => json_encode($req, JSON_NUMERIC_CHECK),
+                CURLOPT_HTTPHEADER => array(
+                    "Cache-Control: no-cache",
+                    "Content-Type: application/json",
+                    "MTH-Deal-Signature: " . $this->merchantKey . ":" . $this->merchantSecret
+                )
+            ));
 
-			return array(
-				'result'   => 'success',
-				'redirect' => $url,
-			);
+            $res = curl_exec($chSign);
+            $resStatus = curl_getinfo($chSign, CURLINFO_HTTP_CODE);
+            $resJson = json_decode($res);
+
+            if ($resStatus && $resStatus >= 400 ) {
+                $message = 'can not create an order - merchant invalid. Merchant must first signup at Monetha';
+                wc_add_notice( __('Payment error: ', 'woothemes') . $resStatus . '' . $resJson->error, 'error' );
+                if ($this->log) { 
+                    $this->log->add('monetha', 'Order #' . $order->id . ' ' . $message);
+                }
+                curl_close($chSign);
+                return;
+            } else {
+                $resJson = json_decode($res);
+                curl_close($chSign);
+
+                // Execute deal and create order at Monetha
+                if ($resJson && $resJson->token !== "") {
+                    $chExec = curl_init();
+                    curl_setopt_array($chExec, array(
+                        CURLOPT_URL => $mthApi . "v1/deals/execute?token=" . $resJson->token,
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_POSTFIELDS => $res,
+                        CURLOPT_CUSTOMREQUEST => "GET",
+                        CURLOPT_HTTPHEADER => array(
+                            "Cache-Control: no-cache",
+                            "Content-Type: application/json"
+                        )
+                    ));
+
+                    $res = curl_exec($chExec);
+                    $resStatus = curl_getinfo($chExec, CURLINFO_HTTP_CODE);
+                    $resJson = json_decode($res);
+
+                    if ($resStatus && $resStatus >= 400) {
+                        $message = 'can not create an order - merchant invalid. order information is invalid or service is temporary unavailable. Please consult php error logs for more information';
+                        
+                        wc_add_notice( __('Payment error: ', 'woothemes') . $resJson->error, 'error' );
+                        if ($this->log) { 
+                            $this->log->add('monetha', 'Order #' . $order->id . ' ' . $message);
+                        }
+                        curl_close($chExec);
+                        return;
+                    } else {
+                        
+                        
+                        if ($resJson->order && $resJson->order->payment_url !== "") {
+                            
+                            // Mark as on-hold (we're awaiting the cheque)
+                            $order->update_status('pending', __( 'Monetha processing payment', 'woocommerce' ));
+
+                            // Remove cart
+                            $woocommerce->cart->empty_cart();
+
+                            // Redirect to payment page
+                            return array(
+                                'result'   => 'success',
+                                'redirect' => $resJson->order->payment_url
+                            );
+                        } else {
+                            $message = 'can not create an order - order information is invalid or service is temporary unavailable. Please consult php error logs for more information';
+                            wc_add_notice( __('Payment error: ', 'woothemes') . $message, 'error' );
+                            if ($this->log) { 
+                                $this->log->add('monetha', 'Order #' . $order->id . ' ' . $message);
+                            }
+                            return;
+                        }
+                    }
+
+                } else {
+                    $message = 'can not create an order - merchant invalid. Merchant must first signup at Monetha';
+                    wc_add_notice( __('Payment error: ', 'woothemes') . $message, 'error' );
+                    if ($this->log) { 
+                        $this->log->add('monetha', 'Order #' . $order->id . ' ' . $message);
+					}
+                    return;
+                }
+            }
+			
 		}
 
 		//Check callback
@@ -216,7 +319,7 @@ function monetha_init()
 		}
 
 		/**
-		 *
+		 * Callback function used to complete the order in Woocomerce
 		 *
 		 * @param array $request
 		 *
@@ -227,44 +330,56 @@ function monetha_init()
 
 			try
 			{
-				$response = $_REQUEST;
+                $response = $_REQUEST;
+                
+                if (hash('sha256',$this->merchantSecret + $response['oid']) == $response['order']) {
 
-				$order = new WC_Order($response['oid']);
+                    $order = new WC_Order($response['oid']);
 
-				if (round($order->get_total(), 10) > $response['amount'])
-				{
-					if ($this->log)
+                    if (round($order->get_total(), 10) != $response['amount'])
+                    {
+                        if ($this->log)
+                        {
+                            $this->log->add('monetha', 'Order #' . $order->id . ' Amounts do no match. ' . (round($order->get_total(), 10)) . '!=' . $response['amount']);
+                        }
+
+                        throw new Exception('Amounts do not match');
+                    }
+
+                    if (strtolower(get_woocommerce_currency()) != strtolower($response['currency']))
+                    {
+                        if ($this->log)
+                        {
+                            $this->log->add('monetha', 'Order #' . $order->id . ' Currencies do not match. ' . get_woocommerce_currency() . '!=' . $response['currency']);
+                        }
+
+                        throw new Exception('Currencies do not match');
+                    }
+
+                    if ($order->status !== 'completed') {
+                        if ($this->log) {
+                            $this->log->add('monetha', 'Order #' . $order->id . ' Callback payment completed.');
+                        }
+
+                        $order->add_order_note(__('Payment completed. Check order #'. $response['mthoid'] . ' in your ethereum Merchant wallet provided by Monetha', 'woocomerce'));
+                        $order->payment_complete();
+                    }
+
+                    
+                    echo 'OK';
+                } else {
+                    $msg = 'invalid payment callback. Order hash does not match';
+                    if ($this->log)
 					{
-						$this->log->add('monetha', 'Order #' . $order->id . ' Amounts do no match. ' . (round($order->get_total(), 10)) . '!=' . $response['amount']);
-					}
-
-					throw new Exception('Amounts do not match');
-				}
-
-				if (strtolower(get_woocommerce_currency()) != $response['currency'])
-				{
-					if ($this->log)
-					{
-						$this->log->add('monetha', 'Order #' . $order->id . ' Currencies do not match. ' . get_woocommerce_currency() . '!=' . $response['currency']);
-					}
-
-					throw new Exception('Currencies do not match');
-				}
-
-				if ($order->status !== 'completed') {
-					if ($this->log) {
-						$this->log->add('monetha', 'Order #' . $order->id . ' Callback payment completed.');
-					}
-
-					$order->add_order_note(__('Callback payment completed', 'woocomerce'));
-					$order->payment_complete();
-				}
-
-				echo 'OK';
+						$this->log->add('monetha', $msg);
+                    }
+                    throw new Exception($msg);
+                }
+				
 			}
 			catch (Exception $e)
 			{
-				$msg = get_class($e) . ': ' . $e->getMessage();
+                $msg = get_class($e) . ': ' . $e->getMessage();
 				if ($this->log)
 				{
 					$this->log->add('monetha', $msg);
@@ -273,7 +388,7 @@ function monetha_init()
 			}
 
 			exit();
-		}
+        }
 	}
 
 	/**
@@ -288,7 +403,9 @@ function monetha_init()
 	{
 		$methods[] = 'WC_Gateway_Monetha';
 		return $methods;
-	}
+    }
+    
+    
 
 	add_filter('woocommerce_payment_gateways', 'add_monetha_gateway');
 }
