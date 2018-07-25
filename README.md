@@ -1,7 +1,7 @@
 # WooCommerce
 Monetha payment gateway integration with WooCommerce
 
-Install and configuration guide is available on our website - http://ico.monetha.io/en/mvp/woocommerce
+Detailed install and configuration guide is available at https://help.monetha.io/hc/en-us/articles/360002562491-WooCommerce-integration
 
 Contact [email](team@monetha.io)
 
