@@ -18,7 +18,7 @@ add_action('plugins_loaded', 'monetha_init');
 
 function monetha_init()
 {
-    
+
 	if(!class_exists('WC_Payment_Gateway'))
 	{
 		return;
@@ -154,20 +154,20 @@ function monetha_init()
 			}
 		}
 
-        /* 
+        /*
          *
          * Execute monetha integration calls and redirect to payment page on success
-         * 
-         */ 
+         *
+         */
 		function process_payment($order_id)
 		{
-            $mthApi = "https://api.monetha.io/";
+            $mthApi = "https://api.monetha.io/mth-gateway/";
             if ($this->testMode === "yes") {
-                $mthApi = "https://api-sandbox.monetha.io/";
-            }   
-            
+                $mthApi = "https://api-sandbox.monetha.io/mth-gateway/";
+            }
+
 			global $woocommerce;
-            
+
             if ($this->merchantKey === '' || $this->merchantSecret === '') {
                 $message = 'payment gateway miss-configured. Please check instructions and validate Woocommerce checkout settings';
                 wc_add_notice( __('Payment error: ', 'woothemes') . $message, 'error' );
@@ -258,7 +258,7 @@ function monetha_init()
             $resJson = json_decode($res);
 
             error_log($res);
-            
+
             if ($resStatus && $resStatus != 200 ) {
                 $this->handleError($resStatus, $resJson);
                 curl_close($chSign);
@@ -266,7 +266,7 @@ function monetha_init()
             } else {
                 $resJson = json_decode($res);
                 curl_close($chSign);
-                
+
                 // Execute deal and create order at Monetha
                 if ($resJson && $resJson->token !== '') {
                     $chExec = curl_init();
@@ -290,9 +290,9 @@ function monetha_init()
                         curl_close($chExec);
                         return;
                     } else {
-                        
+
                         if ($resJson->order && $resJson->order->payment_url !== "") {
-                            
+
                             // Mark as on-hold (we're awaiting the cheque)
                             $order->update_status('pending', __( 'Monetha processing payment', 'woocommerce' ));
 
@@ -307,7 +307,7 @@ function monetha_init()
                         } else {
                             $message = 'can not create an order - order information is invalid or service is temporary unavailable. Please consult php error logs for more information';
                             wc_add_notice( __('Payment error: ', 'woothemes') . $message, 'error' );
-                            if ($this->log) { 
+                            if ($this->log) {
                                 $this->log->add('monetha', 'Order #' . $order->id . ' ' . $message);
                             }
                             return;
@@ -316,13 +316,13 @@ function monetha_init()
 
                 } else {
                     wc_add_notice( __('Payment error: ', 'woothemes') . $resJson->error, 'error' );
-                    if ($this->log) { 
+                    if ($this->log) {
                         $this->log->add('monetha', 'Order #' . $order->id . ' ' . $message);
 					}
                     return;
                 }
             }
-			
+
 		}
 
 		// Check callback
@@ -345,7 +345,7 @@ function monetha_init()
 			try
 			{
                 $response = $_REQUEST;
-                
+
                 if (hash('sha256',$this->merchantSecret + $response['oid']) === $response['order']) {
 
                     $order = new WC_Order($response['oid']);
@@ -379,7 +379,7 @@ function monetha_init()
                         $order->payment_complete();
                     }
 
-                    
+
                     echo 'OK';
                 } else {
                     $msg = 'invalid payment callback. Order hash does not match';
@@ -389,7 +389,7 @@ function monetha_init()
                     }
                     throw new Exception($msg);
                 }
-				
+
 			}
 			catch (Exception $e)
 			{
@@ -423,7 +423,7 @@ function monetha_init()
             }
 
             wc_add_notice( __('Payment error: ', 'woothemes') . 'status ' . $resStatus . ' ' . $message, 'error' );
-            if ($this->log) { 
+            if ($this->log) {
                 $this->log->add('monetha', 'Order #' . $order->id . ' ' . $message);
             }
         }
@@ -442,8 +442,8 @@ function monetha_init()
 		$methods[] = 'WC_Gateway_Monetha';
 		return $methods;
     }
-    
-    
+
+
 
 	add_filter('woocommerce_payment_gateways', 'add_monetha_gateway');
 }
