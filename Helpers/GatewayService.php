@@ -15,7 +15,7 @@ class GatewayService
     {
         $this->merchantSecret = $merchantSecret;
         $this->mthApiKey = $mthApiKey;
-        $this->testMode = $testMode;
+        $this->testMode = $testMode == 'no' ? "0" : $testMode;
     }
 
     /**

@@ -174,7 +174,7 @@ function monetha_init()
                 $gatewayService = new GatewayService(
                     $postData['woocommerce_monetha_merchantSecret'],
                     $postData['woocommerce_monetha_mthApiKey'],
-                    $postData['woocommerce_monetha_testMode']
+                    $postData['woocommerce_monetha_testMode'] == null ? '0' : $postData['woocommerce_monetha_testMode']
                 );
 
                 try {
