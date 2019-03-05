@@ -14,9 +14,15 @@ class HttpService
                 "Content-Type: application/json"
             )),
         ];
-
         if ($method !== 'GET' && $body) {
-            $options[CURLOPT_POSTFIELDS] = json_encode($body, JSON_NUMERIC_CHECK);
+            $client_uri = @end(explode('/',$uri));
+            if($client_uri == 'clients') {
+                $options[CURLOPT_POSTFIELDS] = json_encode($body);
+            }
+            else {
+                $options[CURLOPT_POSTFIELDS] = json_encode($body, JSON_NUMERIC_CHECK);
+            }
+            
             $options[CURLOPT_CUSTOMREQUEST] = $method;
         }
 
@@ -26,11 +32,21 @@ class HttpService
         $error = curl_error($chSign);
         $resStatus = curl_getinfo($chSign, CURLINFO_HTTP_CODE);
 
-        if ($resStatus == 400
+        if (($resStatus == 400 || 401)
             && isset($res)
-            && isset(json_decode($res)->code)
-            && json_decode($res)->code == 'AMOUNT_TOO_BIG') {
-            throw new \Exception('The value of your cart exceeds the maximum amount. Please remove some of the items from the cart.');
+            && isset(json_decode($res)->code)) {
+            if(json_decode($res)->code == 'AMOUNT_TOO_BIG') {
+                throw new \Exception('The value of your cart exceeds the maximum amount. Please remove some of the items from the cart.');
+            }
+            if(json_decode($res)->code == 'AMOUNT_TOO_SMALL') {
+                throw new \Exception('amount_fiat in body should be greater than or equal to 0.01');
+            }
+            if(json_decode($res)->code == 'INVALID_PHONE_NUMBER') {
+                throw new \Exception('Invalid phone number');
+            }
+            if(json_decode($res)->code == 'AUTH_TOKEN_INVALID') {
+                throw new \Exception('Monetha plugin setup is invalid, please contact merchant.');
+            }
         }
 
         if ($error) {

@@ -1,10 +1,11 @@
 <?php
 
 require_once dirname(__FILE__) . '/../Consts/Consts.php';
+require_once dirname(__FILE__) . '/HttpService.php';
 
 class OrdersService
 {
-    public static function prepareOfferBody($orderId)
+    public static function prepareOfferBody($orderId, $apiUrl, $apiKey)
     {
         global $woocommerce;
         $order = new WC_Order($orderId);
@@ -39,16 +40,44 @@ class OrdersService
                 );
         }
 
+        // define reusable variables
+        $client_id              = 0;
+        $contact_name           = $order->get_billing_first_name() . ' ' . $order->get_billing_last_name();
+        $contact_email          = $order->get_billing_email();
+        $contact_phone_number   = $order->get_billing_phone();
+        $country_code           = $order->get_billing_country();
+        $postal_code            = $order->get_billing_postcode();
+        $address                = $order->get_billing_address_1();
+        $city                   = $order->get_billing_city();
+
+        if($contact_phone_number) {
+            $client_body = array(
+                "contact_name" => $contact_name,
+                "contact_email" => $contact_email,
+                "contact_phone_number" => $contact_phone_number,
+                "country_code_iso" => $country_code,
+                "address" => $address,
+                "city" => $city,
+                "zipcode" => $postal_code
+            );
+
+            $clientResponse = HttpService::callApi($apiUrl . 'v1/clients', 'POST', $client_body, ["Authorization: Bearer " . $apiKey]);
+
+            if(isset($clientResponse->client_id)) {
+                $client_id = $clientResponse->client_id;
+            }
+        }
 
         $req = array(
                 'deal' => array(
                     'amount_fiat' => $order->get_total(),
                     'currency_fiat' => get_woocommerce_currency(),
                     'line_items' => $items,
+                    'client_id' => $client_id,
                     'client' => array(
-                        'contact_name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-                        'contact_email' => $order->get_billing_email(),
-                        'contact_phone_number' => $order->get_billing_phone()
+                        'contact_name' => $contact_name,
+                        'contact_email' => $contact_email,
+                        'contact_phone_number' => $contact_phone_number
                     )
                 ),
                 'return_url' => $order->get_view_order_url(),

@@ -212,7 +212,7 @@ function monetha_init()
             );
 
             $apiUrl = $gatewayService->getApiUrl();
-            $offerBody = OrdersService::prepareOfferBody($order_id);
+            $offerBody = OrdersService::prepareOfferBody($order_id, $apiUrl, $this->mthApiKey);
 
             try {
                 $offerResponse = HttpService::callApi($apiUrl . 'v1/merchants/offer_auth', 'POST', $offerBody, ["Authorization: Bearer " . $this->mthApiKey]);
