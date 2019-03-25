@@ -32,7 +32,7 @@ class HttpService
         $error = curl_error($chSign);
         $resStatus = curl_getinfo($chSign, CURLINFO_HTTP_CODE);
 
-        if (($resStatus == 400 || 401)
+        if (($resStatus >= 400)
             && isset($res)
             && isset(json_decode($res)->code)) {
             if(json_decode($res)->code == 'AMOUNT_TOO_BIG') {
@@ -46,6 +46,18 @@ class HttpService
             }
             if(json_decode($res)->code == 'AUTH_TOKEN_INVALID') {
                 throw new \Exception('Monetha plugin setup is invalid, please contact merchant.');
+            }
+            if(json_decode($res)->code == 'INTERNAL_ERROR') {
+                throw new \Exception('There\'s some internal server error, please contact merchant.');
+            }
+            if(json_decode($res)->code == 'UNSUPPORTED_CURRENCY') {
+                throw new \Exception('Selected currency is not supported by monetha.');
+            }
+            if(json_decode($res)->code == 'PROCESSOR_MISSING') {
+                throw new \Exception('Can\'t process order, please contact merchant.');
+            }
+            if(json_decode($res)->code == 'INVALID_PHONE_COUNTRY_CODE') {
+                throw new \Exception('This country code is invalid, please input correct country code.');
             }
         }
 

@@ -50,6 +50,9 @@ class GatewayService
                     case EventType::FINALIZED:
                         OrdersService::setOrderPaid($order);
                         break;
+                    case EventType::MONEY_AUTHORIZED:
+                        OrdersService::setOrderPaidByCard($order);
+                        break;
                     default:
                         return new WP_Error('bad_action', 'Bad action type', array( 'status' => 400 ));
                         break;
@@ -73,7 +76,11 @@ class GatewayService
         $apiUrl = $apiUrl . 'v1/merchants/' . $merchantId .'/secret';
 
         $response = HttpService::callApi($apiUrl, 'GET', null, ["Authorization: Bearer " . $this->mthApiKey]);
-        return ($response && $response->integration_secret && $response->integration_secret == $this->merchantSecret);
+        if(isset($response->integration_secret))
+        {
+            return $response->integration_secret == $this->merchantSecret;
+        }
+        return false;
     }
 
     public function getMerchantId()

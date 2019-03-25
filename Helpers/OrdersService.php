@@ -13,11 +13,16 @@ class OrdersService
 
         // collect line items
         foreach ($order->get_items() as $item) {
-            $items[] = array(
+            $li = array(
                     'name'			=> $item->get_name(),
                     'quantity'		=> $item->get_quantity(),
                     'amount_fiat'	=> wc_format_decimal($item->get_total()/$item->get_quantity(), 2)
                 );
+
+            if($li['amount_fiat'] > 0)
+            {
+                $items[] = $li;
+            }
         }
 
         // collect shipping amount if any
@@ -91,6 +96,11 @@ class OrdersService
     public static function setOrderPaid($order)
     {
         $order->update_status('processing', 'Order has been successfully paid.', true);
+    }
+
+    public static function setOrderPaidByCard($order)
+    {
+        $order->update_status('processing', 'Order has been successfully paid by your card.', true);
     }
 
     public static function cancelOrder($order, $note)
