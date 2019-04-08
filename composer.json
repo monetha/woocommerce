@@ -12,7 +12,7 @@
     },
     "repositories": [
         {
-            "url": "https://gitlab.com/monetha/payment-plugin-php-sdk.git",
+            "url": "https://github.com/monetha/payment-plugin-php-sdk.git",
             "type": "vcs"
         }
     ],
