@@ -26,5 +26,11 @@ In order to to try our integration in test mode please make sure to check "TestM
 
 When test mode is switched on all payment transactions will be made in Ropsten testnet. Make sure not to send money from Ropsten testnet wallet address.
 
+If you want to create a module from the contents of this repository, perform the actions below:
+
+1. `composer install`
+2. create a zip-archive of all the repository's contents.
+
+Then proceed with an installation like section "Technical guide" describes. 
 
 ### If you have any questions or requests, feel free to ask them via support@monetha.io

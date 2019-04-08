@@ -1,0 +1,22 @@
+{
+    "name": "monetha/woocommerce",
+    "authors": [
+        {
+            "name": "Alexander Hitrov",
+            "email": "alexander.hitrov@monetha.io"
+        }
+    ],
+    "require": {
+        "ext-json": "*",
+        "monetha/payment-plugin-php-sdk": "dev-master"
+    },
+    "repositories": [
+        {
+            "url": "https://gitlab.com/monetha/payment-plugin-php-sdk.git",
+            "type": "vcs"
+        }
+    ],
+    "autoload": {
+        "psr-4": {"Monetha\\": "Monetha/"}
+    }
+}

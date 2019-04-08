@@ -1,11 +1,17 @@
 <?php
 
-add_action('plugins_loaded', 'monetha_init');
+require_once __DIR__ . '/vendor/autoload.php';
 
-require_once dirname(__FILE__) . '/Helpers/GatewayService.php';
-require_once dirname(__FILE__) . '/Helpers/OrdersService.php';
-require_once dirname(__FILE__) . '/Helpers/HttpService.php';
-require_once dirname(__FILE__) . '/Consts/Consts.php';
+use Monetha\WooCommerce\Adapter\ConfigAdapter;
+use Monetha\Services\GatewayService;
+use Monetha\Adapter\ConfigAdapterInterface;
+use Monetha\ConfigAdapterTrait;
+use Monetha\WooCommerce\Adapter\WebHookAdapter;
+use Monetha\WooCommerce\Adapter\OrderAdapter;
+use Monetha\WooCommerce\Adapter\ClientAdapter;
+use Monetha\Response\Exception\ApiException;
+
+add_action('plugins_loaded', 'monetha_init');
 
 /*
   Plugin Name: WooCommerce Payment Gateway - Monetha
@@ -29,8 +35,10 @@ function monetha_init()
 
     define('PLUGIN_DIR', plugins_url(basename(plugin_dir_path(__FILE__)), basename(__FILE__)) . '/');
 
-    class WC_Gateway_Monetha extends WC_Payment_Gateway
+    class WC_Gateway_Monetha extends WC_Payment_Gateway implements ConfigAdapterInterface
     {
+        use ConfigAdapterTrait;
+
         public function __construct()
         {
             global $woocommerce;
@@ -51,7 +59,11 @@ function monetha_init()
             // Define user set variables
             $this->title		= $this->settings['title'];
             $this->merchantSecret = $this->settings['merchantSecret'];
+
             $this->mthApiKey = $this->settings['mthApiKey'];
+            // compatibility with old version
+            $this->monethaApiKey = $this->settings['mthApiKey'];
+
             $this->testMode = $this->settings['testMode'];
 
             $acc = get_query_var('page_id', 0);
@@ -77,21 +89,19 @@ function monetha_init()
 
         public function order_status_changed($order_id, $previousStatus, $currentStatus, $instance)
         {
-            if ($instance->payment_method == 'monetha') {
-                if (($previousStatus != $currentStatus) && $currentStatus == 'cancelled') {
-                    $gateway = new WC_Gateway_Monetha();
-                    $gatewayService = new GatewayService(
-                        $gateway->settings['merchantSecret'],
-                        $gateway->settings['mthApiKey'],
-                        $gateway->settings['testMode']
-                    );
+            if ($instance->payment_method != 'monetha') {
+                return;
+            }
 
-                    $externalOrderId = $instance->get_meta('external_order_id');
+            if (($previousStatus != $currentStatus) && $currentStatus == 'cancelled') {
+                $externalOrderId = $instance->get_meta('external_order_id');
 
-                    if (!empty($externalOrderId)) {
-                        $gatewayService->cancelOrder($externalOrderId);
-                    }
+                if (empty($externalOrderId)) {
+                    return;
                 }
+
+                $packageGatewayService = new GatewayService($this);
+                $packageGatewayService->cancelExternalOrder($externalOrderId);
             }
         }
 
@@ -170,18 +180,18 @@ function monetha_init()
 
             // Validate mth_api_key
             if ($requiredFieldsFilled) {
-                $gateway = new WC_Gateway_Monetha();
-                $gatewayService = new GatewayService(
-                    $postData['woocommerce_monetha_merchantSecret'],
-                    $postData['woocommerce_monetha_mthApiKey'],
-                    $postData['woocommerce_monetha_testMode'] == null ? '0' : $postData['woocommerce_monetha_testMode']
-                );
+                $configAdapter = new ConfigAdapter($postData);
+
+                $packageGatewayService = new GatewayService($configAdapter);
 
                 try {
-                    if (!$gatewayService->validateApiKey()) {
-                        $settings->add_error('Merchant secret or Monetha Api Key is not valid.');
-                    }
+                    $result = $packageGatewayService->validateApiKey();
+
                 } catch (\Exception $ex) {
+                    $result = false;
+                }
+
+                if (!$result) {
                     $settings->add_error('Merchant secret or Monetha Api Key is not valid.');
                 }
             }
@@ -205,69 +215,46 @@ function monetha_init()
                 return;
             }
 
-            $gatewayService = new GatewayService(
-                $this->merchantSecret,
-                $this->mthApiKey,
-                $this->testMode
-            );
-
-            $apiUrl = $gatewayService->getApiUrl();
-            $offerBody = OrdersService::prepareOfferBody($order_id, $apiUrl, $this->mthApiKey);
-
             try {
-                $offerResponse = HttpService::callApi($apiUrl . 'v1/merchants/offer_auth', 'POST', $offerBody, ["Authorization: Bearer " . $this->mthApiKey]);
-                $executionResponse = HttpService::callApi($apiUrl . 'v1/deals/execute?token=' . $offerResponse->token, 'GET', null, []);
+                $order = new WC_Order($order_id);
 
-                if ($executionResponse->order && $executionResponse->order->payment_url !== "") {
+                $orderAdapter = new OrderAdapter($order);
+                $clientAdapter = new ClientAdapter($order);
 
-                    // Mark as on-hold (we're awaiting the cheque)
-                    $order = new WC_Order($order_id);
-                    $order->update_status('pending', __('Monetha processing payment', 'woocommerce'));
+                $packageGatewayService = new GatewayService($this);
+                $executeOfferResponse = $packageGatewayService->getExecuteOfferResponse($orderAdapter, $clientAdapter);
 
-                    // Save external order id
-                    $order->update_meta_data('external_order_id', $executionResponse->order->id);
-                    $order->update_meta_data('payment_url', $executionResponse->order->payment_url);
-                    $order->save();
+                // Mark as on-hold (we're awaiting the cheque)
+                $order = new WC_Order($order_id);
+                $order->update_status('pending', __('Monetha processing payment', 'woocommerce'));
 
-                    // Remove cart
-                    $woocommerce->cart->empty_cart();
+                // Save external order id
+                $order->update_meta_data('external_order_id', $executeOfferResponse->getOrderId());
+                $order->update_meta_data('payment_url', $executeOfferResponse->getPaymentUrl());
+                $order->save();
 
-                    // Redirect to payment page
-                    return array(
-                        'result'   => 'success',
-                        'redirect' => $executionResponse->order->payment_url
-                    );
-                } else {
-                    $message = 'can not create an order - order information is invalid or service is temporary unavailable. Please consult php error logs for more information';
-                    wc_add_notice(__('Payment error: ', 'woothemes') . $message, 'error');
-                    return;
-                }
-            } catch (\Exception $ex) {
-                wc_add_notice(__('Payment error: ', 'woothemes') . ' ' . $ex->getMessage(), 'error');
-                return;
+                // Remove cart
+                $woocommerce->cart->empty_cart();
+
+                // Redirect to payment page
+                return array(
+                    'result'   => 'success',
+                    'redirect' => $executeOfferResponse->getPaymentUrl()
+                );
+
+            } catch (ApiException $e) {
+                $message = sprintf(
+                    'Status code: %s, error: %s, message: %s',
+                    $e->getApiStatusCode(),
+                    $e->getApiErrorCode(),
+                    $e->getMessage()
+                );
+                error_log($message);
+                wc_add_notice(__('Payment error: ', 'woothemes') . ' ' . $e->getFriendlyMessage(), 'error');
+
+            } catch (\Exception $e) {
+                wc_add_notice(__('Payment error: ', 'woothemes') . ' ' . $e->getMessage(), 'error');
             }
-        }
-
-        // Method to handle error messages
-        public function handleError($status = null, $response = null)
-        {
-            $message = '';
-            switch ($status) {
-                case 400:
-                    $message = $response->error;
-                    break;
-                case 502:
-                    $message = 'something wrong have happened please contact Monetha support at support@monetha.io';
-                    break;
-                case 503:
-                    $message = 'service temporary unavailable please try to refresh the page and try again';
-                    break;
-                default:
-                    $message = 'can not create an order';
-                    break;
-            }
-
-            wc_add_notice(__('Payment error: ', 'woothemes') . ' ' . $message, 'error');
         }
     }
 
@@ -300,37 +287,19 @@ function monetha_init()
 
     function process_action(WP_REST_Request $request)
     {
-        // Validate signature
+        $signature = $request->get_headers()['mth_signature'][0];
+        $body = $request->get_body();
+        $data = json_decode($request->get_body());
         try {
-            $gateway = new WC_Gateway_Monetha();
-            $gatewayService = new GatewayService(
-            $gateway->settings['merchantSecret'],
-            $gateway->settings['mthApiKey'],
-            $gateway->settings['testMode']
-        );
-            $signature = $request->get_headers()['mth_signature'][0];
-            $body = $request->get_body();
-            $data = json_decode($request->get_body());
+            $webhookAdapter = new WebHookAdapter($data);
+            $result = $webhookAdapter->processWebHook(new WC_Gateway_Monetha(), $body, $signature);
 
-            // Just simple ping event action
-            if ($data->event == EventType::PING) {
-                return [
-                    'status' => 200,
-                    'message' => 'e-shop healthy'
-                ];
-            }
-
-            if ($gatewayService->validateSignature($signature, $body)) {
-                try {
-                    $gatewayService->processAction($data);
-                } catch (Exception $ex) {
-                    return new WP_Error('bad_request', $ex->getMessage(), array( 'status' => 400 ));
-                }
-            } else {
-                return new WP_Error('bad_signature', 'Bad signature', array( 'status' => 401 ));
-            }
-        } catch (\Exception $ex) {
-            return new WP_Error('bad_request', $ex->getMessage(), array( 'status' => 400 ));
+        } catch (\Exception $e) {
+            return new WP_Error('bad_request', $e->getMessage(), array( 'status' => 400 ));
         }
+
+        return [
+            'status' => !empty($result) ? 204 : 400,
+        ];
     }
 }
