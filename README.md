@@ -29,7 +29,9 @@ When test mode is switched on all payment transactions will be made in Ropsten t
 If you want to create a module from the contents of this repository, perform the actions below:
 
 1. `composer install`
-2. create a zip-archive of all the repository's contents.
+2. create a directory named `monetha_woocommerce_plugin`
+3. copy all the contents from this directory (except `releases` but including `vendor`) inside it
+4. create a zip-archive of new `monetha_woocommerce_plugin` directory's contents.
 
 Then proceed with an installation like section "Technical guide" describes. 
 
