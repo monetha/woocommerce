@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b782a67bc6056b05489c913648fb2b0b",
+    "content-hash": "e178df8e5faa5ef096e6899b8d3e1441",
     "packages": [
         {
             "name": "monetha/payment-plugin-php-sdk",
             "version": "dev-master",
             "source": {
                 "type": "git",
-                "url": "https://gitlab.com/monetha/payment-plugin-php-sdk.git",
-                "reference": "2679f0d74d3d6ad68423ce4e86fc3c3ca171b47c"
+                "url": "https://github.com/monetha/payment-plugin-php-sdk.git",
+                "reference": "ea0cb36078ebe79c21e850b81b497ba1ebf685da"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://gitlab.com/api/v4/projects/monetha%2Fpayment-plugin-php-sdk/repository/archive.zip?sha=2679f0d74d3d6ad68423ce4e86fc3c3ca171b47c",
-                "reference": "2679f0d74d3d6ad68423ce4e86fc3c3ca171b47c",
+                "url": "https://api.github.com/repos/monetha/payment-plugin-php-sdk/zipball/ea0cb36078ebe79c21e850b81b497ba1ebf685da",
+                "reference": "ea0cb36078ebe79c21e850b81b497ba1ebf685da",
                 "shasum": ""
             },
             "require": {
@@ -36,7 +36,11 @@
                     "email": "alexander.hitrov@monetha.io"
                 }
             ],
-            "time": "2019-04-05T14:40:02+00:00"
+            "support": {
+                "source": "https://github.com/monetha/payment-plugin-php-sdk/tree/master",
+                "issues": "https://github.com/monetha/payment-plugin-php-sdk/issues"
+            },
+            "time": "2019-04-17T13:14:07+00:00"
         }
     ],
     "packages-dev": [],
