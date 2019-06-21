@@ -4,11 +4,11 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e178df8e5faa5ef096e6899b8d3e1441",
+    "content-hash": "df5ad77dcae7fdb4a3c7881b23f31dff",
     "packages": [
         {
             "name": "monetha/payment-plugin-php-sdk",
-            "version": "dev-master",
+            "version": "1.0.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/monetha/payment-plugin-php-sdk.git",
@@ -37,7 +37,7 @@
                 }
             ],
             "support": {
-                "source": "https://github.com/monetha/payment-plugin-php-sdk/tree/master",
+                "source": "https://github.com/monetha/payment-plugin-php-sdk/tree/1.0.7",
                 "issues": "https://github.com/monetha/payment-plugin-php-sdk/issues"
             },
             "time": "2019-04-26T10:37:57+00:00"
@@ -46,9 +46,7 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "monetha/payment-plugin-php-sdk": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
