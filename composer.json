@@ -8,7 +8,7 @@
     ],
     "require": {
         "ext-json": "*",
-        "monetha/payment-plugin-php-sdk": "dev-master"
+        "monetha/payment-plugin-php-sdk": "1.0.7"
     },
     "repositories": [
         {
